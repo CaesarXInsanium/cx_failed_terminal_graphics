@@ -1,6 +1,7 @@
 use colorful::{RGB, Colorful};
 mod sphere;
 use sphere::{Sphere};
+use image::*;
 
 
 #[derive(Debug , Clone)]
@@ -31,6 +32,7 @@ impl Color{
        //"#".red()
         " ".bg_color(RGB::new(self.0, self.1, self.2)) 
     }
+
 }
 
 impl Default for Color{
@@ -114,10 +116,11 @@ impl Default for Frame{
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 /// Represents the screen
 pub struct Canvas{
     buffer: Vec<Vec<Color>>,
+    image: image::DynamicImage,
     height: usize,
     width: usize,
     camera: Camera,
@@ -134,8 +137,10 @@ impl Canvas{
             }
             v.push(row);
         }
+        let mut im = image::DynamicImage::new_rgb8(x as u32, y as u32);
         Canvas{
             buffer: v,
+            image: im,
             height: y,
             width: x,
             camera: cam,
@@ -145,8 +150,14 @@ impl Canvas{
 
     /// Implements raytracing. with reverse photon tracking.
     pub fn draw(&mut self, spheres: &Vec<Sphere>){
-       for x in 0..self.width{
-        for y in 0..self.height{
+        let heighthalf = self.height as f32 / 2.0;
+        let widthhalf = self.width as f32 / 2.0;
+        println!("hh: {:?}\twh: {:?}", &heighthalf, &widthhalf);
+
+       for x in (-(self.width as f32 / 2.0) as usize)..((self.width as f32/ 2.0) as usize){
+           println!("x: {:?}", x);
+        for y in (-(self.height as f32 / 2.0) as usize)..((self.height
+                                                           as f32/ 2.0) as usize){
            // point in viewport corresponding to Canvas , vector from camera to point in viewport
            // that corresponds to canvas coords
            let d: Vec3 = self.viewport.canvas_to_viewport_coords(
@@ -155,46 +166,54 @@ impl Canvas{
                );
            let o = &self.camera.pos;
            let color = trace_ray(spheres, o, &d, 1.0, f32::INFINITY);
-           self.put_pixel(x,y,color);
+           self.put_pixel(x.clone(),y.clone(),color.clone());
 
         }
        } 
     }
 
     pub fn flush(&self){
-        for row in self.buffer.iter(){
-            // let mut line= colorful::core::color_string::CString::new("");
-            for color in row.iter(){
-                let s = color.to_ascii(); 
-                print!("{}", s);
-            }
-            println!("")
-        }
+        // for row in self.buffer.iter(){
+        //     // let mut line= colorful::core::color_string::CString::new("");
+        //     for color in row.iter(){
+        //         let s = color.to_ascii(); 
+        //         print!("{}", s);
+        //     }
+        //     println!("")
+        // }
+         match self.image.save(format!("images/test{:?}image.png", std::time::SystemTime::now())){
+             Ok(_)  => (),
+             Err(_) => (),
+         }
     }
     /// takes in canvas coordinates to place color
     pub fn put_pixel(&mut self, x: usize, y: usize, color: Color){
-       self.buffer[y][x] = color; 
+        let cx = (1.0 / x as f32) * (self.viewport.width as f32 / self.width as f32);
+        let cy = (1.0 / y as f32) * (self.viewport.height as f32/ self.height as f32);
+
+       self.image.put_pixel(cx as u32, cy as u32, image::Pixel::from_channels(color.0, color.1, color.2, 1));
     }
     /// convert system/human coordinates to Canvas/screen coordinates
     fn _convert(&self, c: Vec2)->(Option<usize>, Option<usize>){
         ((c.0 as usize).checked_sub(self.width / 2), (c.1 as usize).checked_sub(self.height / 2)) 
     }
 }
+
+
 fn main() {
-    let frame = Frame::new_accurate(0.9, 2.0, 2.0);
+    let frame = Frame::new_accurate(1.0, 1.0, 1.0);
     let camera = Camera{
-        pos: Vec3(0.0, 1.0, 0.0)
+        pos: Vec3(0.0, 0.0, -1.0)
     };
     let sphere1 = Sphere{center: Vec3(0.0,-1.0,3.0),radius:1.0,color:Color(255,0,0)};
     let sphere2 = Sphere{center: Vec3(2.0,0.0,4.0),radius:1.0,color:Color(0,0,255)};
     let sphere3 = Sphere{center: Vec3(-2.0,0.0,4.0),radius:1.0,color:Color(0,255,0)};
     let v = vec![sphere1, sphere2, sphere3];
-    let mut canvas = Canvas::new(200,60, camera, frame);
-    canvas.draw(&v);
-    canvas.flush();
+    let mut canvas = Canvas::new(800,600, camera, frame);
 
-    for i in -5..=5{
+    for i in -1..=1{
         println!("i: {:?}", &i);
+
         let newcamera = Camera{pos: Vec3(i as f32, 0.0,0.0)};
         canvas.camera = newcamera;
         canvas.draw(&v);

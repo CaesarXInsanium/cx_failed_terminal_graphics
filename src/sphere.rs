@@ -10,14 +10,14 @@ pub struct Sphere{
 }
 
 #[derive(Debug, Default)]
-pub struct Ray{
+pub struct _Ray{
     pub origin: Vec3,
     pub direction: Vec3
 }
 
-impl Ray{
-    pub fn from_point_vec(point: &Vec3, dirc: &Vec3) -> Ray{
-        Ray{
+impl _Ray{
+    pub fn from_point_vec(point: &Vec3, dirc: &Vec3) -> _Ray{
+        _Ray{
             origin: point.clone(),
             direction: dirc.clone()
         }
