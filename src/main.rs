@@ -2,6 +2,8 @@ use colorful::{RGB, Colorful};
 mod sphere;
 use sphere::{Sphere};
 use image::*;
+mod light;
+use light::*;
 
 
 #[derive(Debug , Clone)]
@@ -32,6 +34,12 @@ impl Color{
        //"#".red()
         " ".bg_color(RGB::new(self.0, self.1, self.2)) 
     }
+    pub fn scale(&self, scalar: &f32)->Color{
+        let r = (self.0 as f32) * scalar;
+        let g = (self.1 as f32) * scalar;
+        let b = (self.2 as f32) * scalar;
+        Color(r as u8, g as u8, b as u8)
+    }
 
 }
 
@@ -55,8 +63,14 @@ impl Vec2{
 pub struct Vec3(f32,f32,f32);
 
 impl Vec3{
+    const ZERO: Self = Vec3(0.0,0.0,0.0);
     pub fn norm(&self)->f32{
         (self.0.powf(2.0) + self.1.powf(2.0) + self.2.powf(2.0)).sqrt()
+    }
+
+    pub fn normalize(&self) -> Self{
+        let n = self.norm();
+        Vec3(self.0/n, self.1/n, self.2/n)
     }
     pub fn distance(&self, other: &Vec3) -> f32{
         let d = (
@@ -66,11 +80,23 @@ impl Vec3{
             ).sqrt();
         d
     }
+    pub fn add(&self, other: &Vec3) -> Vec3{
+        Vec3(self.0 + other.0, self.1 + other.1, self.2 + other.2) 
+    }
     pub fn sub(&self, other: &Vec3) -> Vec3{
        Vec3(self.0 - other.0, self.1 - other.1, self.2 - other.2) 
     }
     pub fn dot(&self, other: &Vec3) -> f32{
         (self.0 * other.0) + (self.1 * other.1) + (self.2 * other.2)
+    }
+    pub fn scalar_add(&self, scalar: &f32)->Vec3{
+        Vec3(self.0 + scalar, self.1 + scalar, self.2 + scalar)
+    }
+    pub fn scalar_sub(&self, scalar: &f32)->Vec3{
+        Vec3(self.0 - scalar, self.1 - scalar, self.2 - scalar)
+    }
+    pub fn scale(&self, scalar: &f32)->Vec3{
+        Vec3(self.0 * scalar, self.1 * scalar, self.2 * scalar)
     }
 }
 
@@ -121,17 +147,17 @@ impl Default for Frame{
 pub struct Canvas{
     buffer: Vec<Vec<Color>>,
     image: image::DynamicImage,
-    height: usize,
-    width: usize,
+    height: i32,
+    width: i32,
     camera: Camera,
     viewport: Frame
 }
 
 impl Canvas{
-    pub fn new(x: usize, y: usize, cam: Camera, view: Frame) -> Canvas{
-        let mut v = Vec::with_capacity(y);
+    pub fn new(x: i32, y: i32, cam: Camera, view: Frame) -> Canvas{
+        let mut v = Vec::with_capacity(y as usize);
         for _ in 0..y{
-            let mut row = Vec::with_capacity(x);
+            let mut row = Vec::with_capacity(x as usize);
             for _ in 0..x{
                 row.push(Color::default());
             }
@@ -149,15 +175,12 @@ impl Canvas{
     }
 
     /// Implements raytracing. with reverse photon tracking.
-    pub fn draw(&mut self, spheres: &Vec<Sphere>){
-        let heighthalf = self.height as f32 / 2.0;
-        let widthhalf = self.width as f32 / 2.0;
-        println!("hh: {:?}\twh: {:?}", &heighthalf, &widthhalf);
+    pub fn draw(&mut self, spheres: &Vec<Sphere>, lights: &Vec<Light>){
+        let heighthalf = (self.height as f32 / 2.0) as i32;
+        let widthhalf = (self.width as f32 / 2.0) as i32;
 
-       for x in (-(self.width as f32 / 2.0) as usize)..((self.width as f32/ 2.0) as usize){
-           println!("x: {:?}", x);
-        for y in (-(self.height as f32 / 2.0) as usize)..((self.height
-                                                           as f32/ 2.0) as usize){
+       for x in (-widthhalf)..widthhalf{
+           for y in (-heighthalf)..heighthalf{
            // point in viewport corresponding to Canvas , vector from camera to point in viewport
            // that corresponds to canvas coords
            let d: Vec3 = self.viewport.canvas_to_viewport_coords(
@@ -165,8 +188,8 @@ impl Canvas{
                self 
                );
            let o = &self.camera.pos;
-           let color = trace_ray(spheres, o, &d, 1.0, f32::INFINITY);
-           self.put_pixel(x.clone(),y.clone(),color.clone());
+           let color = trace_ray(spheres, lights,o, &d, 1.0, f32::INFINITY);
+           self.put_pixel((x+widthhalf) as isize,(y+heighthalf) as isize,color);
 
         }
        } 
@@ -181,21 +204,14 @@ impl Canvas{
         //     }
         //     println!("")
         // }
-         match self.image.save(format!("images/test{:?}image.png", std::time::SystemTime::now())){
+         match self.image.flipv().save(format!("images/test{:?}image.png", std::time::SystemTime::now())){
              Ok(_)  => (),
              Err(_) => (),
          }
     }
     /// takes in canvas coordinates to place color
-    pub fn put_pixel(&mut self, x: usize, y: usize, color: Color){
-        let cx = (1.0 / x as f32) * (self.viewport.width as f32 / self.width as f32);
-        let cy = (1.0 / y as f32) * (self.viewport.height as f32/ self.height as f32);
-
-       self.image.put_pixel(cx as u32, cy as u32, image::Pixel::from_channels(color.0, color.1, color.2, 1));
-    }
-    /// convert system/human coordinates to Canvas/screen coordinates
-    fn _convert(&self, c: Vec2)->(Option<usize>, Option<usize>){
-        ((c.0 as usize).checked_sub(self.width / 2), (c.1 as usize).checked_sub(self.height / 2)) 
+    pub fn put_pixel(&mut self, x: isize, y: isize, color: Color){
+        self.image.put_pixel( x as u32, y as u32, image::Pixel::from_channels(color.0, color.1, color.2, 1));
     }
 }
 
@@ -208,15 +224,21 @@ fn main() {
     let sphere1 = Sphere{center: Vec3(0.0,-1.0,3.0),radius:1.0,color:Color(255,0,0)};
     let sphere2 = Sphere{center: Vec3(2.0,0.0,4.0),radius:1.0,color:Color(0,0,255)};
     let sphere3 = Sphere{center: Vec3(-2.0,0.0,4.0),radius:1.0,color:Color(0,255,0)};
-    let v = vec![sphere1, sphere2, sphere3];
-    let mut canvas = Canvas::new(800,600, camera, frame);
+    let sphere4 = Sphere{center: Vec3(0.0,-5001.0,0.0), radius: 5000.0, color:Color(255,255,0)};
+    let light1 = Light::Ambient(AmbientLight{intensity:0.2});
+    let light2 = Light::Point(PointLight{intensity:0.6,point:Vec3(2.0,1.0,0.0)});
+    let light3 = Light::Directional(DirectionalLight{intensity:0.2,direction:Vec3(1.0,4.0,4.0)});
+    let lights =vec![light1,light2,light3];
+
+    let spheres = vec![sphere1, sphere2, sphere3,sphere4];
+    let mut canvas = Canvas::new(800,800, camera, frame);
 
     for i in -1..=1{
         println!("i: {:?}", &i);
 
         let newcamera = Camera{pos: Vec3(i as f32, 0.0,0.0)};
         canvas.camera = newcamera;
-        canvas.draw(&v);
+        canvas.draw(&spheres, &lights);
         canvas.flush();
     }
 }
@@ -238,7 +260,7 @@ fn intersect_ray_sphere(o: &Vec3, d: &Vec3, sphere: &Sphere)->(f32,f32){
     (t1,t2)
 }
 
-fn trace_ray(spheres: &Vec<Sphere>, o: &Vec3, d: &Vec3, t_min: f32, _t_max: f32)->Color{
+fn trace_ray(spheres: &Vec<Sphere>,lights: &Vec<Light>, o: &Vec3, d: &Vec3, t_min: f32, _t_max: f32)->Color{
     let mut closest_t = f32::INFINITY;
     let mut closest_sphere: Option<&Sphere> = None;
     for sphere in spheres.iter(){
@@ -253,8 +275,40 @@ fn trace_ray(spheres: &Vec<Sphere>, o: &Vec3, d: &Vec3, t_min: f32, _t_max: f32)
         }
     }
 
+    let p = &o.add(&d.scale(&closest_t));
+    let n = p.sub(match closest_sphere{Some(x)=>{&x.center},None=>&Vec3::ZERO}).normalize();
+    
+    let result = compute_lighting(lights, p, &n);
+
+    assert!(result > 0.0 && result <= 1.0);
+
     match closest_sphere{
-        Some(x)     => x.color.clone(),
-        None        => Color(0, 0, 0)
+        Some(x)     => x.color.clone().scale(&(result)),
+        None        => Color::WHITE
     }
+}
+pub fn compute_lighting(lights: &Vec<Light>, p: &Vec3, n: &Vec3)->f32{
+    let mut i = 0.0;
+    for light in lights.iter(){
+        match light{
+            Light::Ambient(light) => {
+                i += light.intensity
+            },
+            Light::Point(light) => {
+                let l = light.point.sub(p);
+                let n_dot_l = n.dot(&l);
+                if n_dot_l > 0.0{
+                    i += light.intensity * (n_dot_l / (n.norm() * l.norm())) 
+                }
+            },
+            Light::Directional(light) => {
+                let l = &light.direction;
+                let n_dot_l = n.dot(&l);
+                if n_dot_l > 0.0{
+                    i += light.intensity * (n_dot_l / (n.norm() * l.norm()) ) 
+                }
+            },
+        }
+    }
+    i
 }
