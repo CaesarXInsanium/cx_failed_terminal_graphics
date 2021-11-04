@@ -5,5 +5,6 @@ use crate::Color;
 pub struct Sphere{
     pub center: Vec3,
     pub radius: f32,
-    pub color: Color
+    pub color: Color,
+    pub specular: f32
 }

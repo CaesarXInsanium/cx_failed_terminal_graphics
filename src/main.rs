@@ -221,15 +221,16 @@ fn main() {
     let camera = Camera{
         pos: Vec3(0.0, 0.0, -1.0)
     };
-    let sphere1 = Sphere{center: Vec3(0.0,-1.0,3.0),radius:1.0,color:Color(255,0,0)};
-    let sphere2 = Sphere{center: Vec3(2.0,0.0,4.0),radius:1.0,color:Color(0,0,255)};
-    let sphere3 = Sphere{center: Vec3(-2.0,0.0,4.0),radius:1.0,color:Color(0,255,0)};
-    let sphere4 = Sphere{center: Vec3(0.0,-5001.0,0.0), radius: 5000.0, color:Color(255,255,0)};
+    let sphere1 = Sphere{center: Vec3(0.0,-1.0,3.0),radius:1.0,color:Color(255,0,0),specular:500.0};
+    let sphere2 = Sphere{center: Vec3(2.0,0.0,4.0),radius:1.0,color:Color(0,0,255),specular:500.0};
+    let sphere3 = Sphere{center: Vec3(-2.0,0.0,4.0),radius:1.0,color:Color(0,255,0),specular:10.0};
+    let sphere4 = Sphere{center: Vec3(0.0,-5001.0,0.0), radius: 5000.0, color:Color(255,255,0),specular:1000.0};
+
     let light1 = Light::Ambient(AmbientLight{intensity:0.2});
     let light2 = Light::Point(PointLight{intensity:0.6,point:Vec3(2.0,1.0,0.0)});
     let light3 = Light::Directional(DirectionalLight{intensity:0.2,direction:Vec3(1.0,4.0,4.0)});
-    let lights =vec![light1,light2,light3];
 
+    let lights =vec![light1,light2,light3];
     let spheres = vec![sphere1, sphere2, sphere3,sphere4];
     let mut canvas = Canvas::new(800,800, camera, frame);
 
@@ -276,18 +277,26 @@ fn trace_ray(spheres: &Vec<Sphere>,lights: &Vec<Light>, o: &Vec3, d: &Vec3, t_mi
     }
 
     let p = &o.add(&d.scale(&closest_t));
-    let n = p.sub(match closest_sphere{Some(x)=>{&x.center},None=>&Vec3::ZERO}).normalize();
-    
-    let result = compute_lighting(lights, p, &n);
 
-    assert!(result > 0.0 && result <= 1.0);
+    let (n,v,s) = match closest_sphere {
+        Some(sphere) =>{
+            (p.sub(&sphere.center).normalize(), d.scale(&-1.0), sphere.specular)
+        },
+        None =>{
+            (Vec3::ZERO, d.scale(&-1.0), -1.0)
+        }
+    };
+    
+    let result = compute_lighting(lights, p, &n,&v,&s);
+
+    assert!(result >= 0.0 && result <= 1.0);
 
     match closest_sphere{
         Some(x)     => x.color.clone().scale(&(result)),
         None        => Color::WHITE
     }
 }
-pub fn compute_lighting(lights: &Vec<Light>, p: &Vec3, n: &Vec3)->f32{
+pub fn compute_lighting(lights: &Vec<Light>, p: &Vec3, n: &Vec3, v: &Vec3, s: &f32)->f32{
     let mut i = 0.0;
     for light in lights.iter(){
         match light{
@@ -300,6 +309,14 @@ pub fn compute_lighting(lights: &Vec<Light>, p: &Vec3, n: &Vec3)->f32{
                 if n_dot_l > 0.0{
                     i += light.intensity * (n_dot_l / (n.norm() * l.norm())) 
                 }
+
+                if s > &0.0{
+                    let r = n.scale(&(2.0 * n.dot(&l))).sub(&l);
+                    let r_dot_v = r.dot(v);
+                    if r_dot_v > 0.0{
+                        i += light.intensity * (r_dot_v/(r.norm() * v.norm())).powf(*s);
+                    }
+                }
             },
             Light::Directional(light) => {
                 let l = &light.direction;
@@ -307,8 +324,16 @@ pub fn compute_lighting(lights: &Vec<Light>, p: &Vec3, n: &Vec3)->f32{
                 if n_dot_l > 0.0{
                     i += light.intensity * (n_dot_l / (n.norm() * l.norm()) ) 
                 }
+
+                if s > &0.0{
+                    let r = n.scale(&(2.0 * n.dot(&l))).sub(&l);
+                    let r_dot_v = r.dot(v);
+                    if r_dot_v > 0.0{
+                        i += light.intensity * (r_dot_v/(r.norm() * v.norm())).powf(*s);
+                    }
+                }
             },
         }
     }
-    i
+    i / lights.len() as f32
 }

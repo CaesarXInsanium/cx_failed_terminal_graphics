@@ -1,4 +1,4 @@
-use crate::{Vec3, light};
+use crate::{Vec3};
 #[derive(Debug, Clone)]
 pub enum Light{
     Ambient(AmbientLight),
