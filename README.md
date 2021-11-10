@@ -1,5 +1,8 @@
 # I give up on this particular project
 
-But I will not give up on graphics programming. I think that I am just getting started.
 
+Well it looks like I am most certanly back to doing this
 
+# MAMA din't raise no quitter.
+
+I think that I will be back to this project in a while later. Because I want to do other things.
